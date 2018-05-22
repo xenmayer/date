@@ -11,6 +11,9 @@ use Symfony\Component\Translation\TranslatorInterface;
 
 class Date extends Carbon
 {
+    public const FULL_MONTH_TRANSLATION_PREFIX  = 'month.full.';
+    public const SHORT_MONTH_TRANSLATION_PREFIX = 'month.short.';
+
     /**
      * The Translator implementation.
      *
@@ -35,21 +38,21 @@ class Date extends Carbon
     /**
      * Returns new DateTime object.
      *
-     * @param  string $time
-     * @param  string|DateTimeZone $timezone
+     * @param string              $time
+     * @param DateTimeZone|string $timezone
      */
     public function __construct($time = null, $timezone = null)
     {
         if (is_int($time)) {
             $timestamp = $time;
-            $time = null;
+            $time      = null;
         } else {
             $timestamp = null;
         }
 
         parent::__construct($time, $timezone);
 
-        if ($timestamp !== null) {
+        if (null !== $timestamp) {
             $this->setTimestamp($timestamp);
         }
     }
@@ -57,8 +60,9 @@ class Date extends Carbon
     /**
      * Create and return new Date instance.
      *
-     * @param  string $time
-     * @param  string|DateTimeZone $timezone
+     * @param string              $time
+     * @param DateTimeZone|string $timezone
+     *
      * @return Date
      */
     public static function make($time = null, $timezone = null)
@@ -69,8 +73,9 @@ class Date extends Carbon
     /**
      * Create a Date instance from a string.
      *
-     * @param  string $time
-     * @param  string|DateTimeZone $timezone
+     * @param Carbon|string       $time
+     * @param DateTimeZone|string $timezone
+     *
      * @return Date
      */
     public static function parse($time = null, $timezone = null)
@@ -90,11 +95,11 @@ class Date extends Carbon
     }
 
     /**
-     * @inheritdoc
+     * {@inheritdoc}
      */
     public static function createFromFormat($format, $time, $timezone = null)
     {
-        $time = static::translateTimeString($time);
+        $time = static::translateTimeString($time, $format);
 
         return parent::createFromFormat($format, $time, $timezone);
     }
@@ -102,8 +107,9 @@ class Date extends Carbon
     /**
      * Alias for diffForHumans.
      *
-     * @param  Date $since
-     * @param  bool $absolute Removes time difference modifiers ago, after, etc
+     * @param Date $since
+     * @param bool $absolute Removes time difference modifiers ago, after, etc
+     *
      * @return string
      */
     public function ago($since = null, $absolute = false)
@@ -114,7 +120,8 @@ class Date extends Carbon
     /**
      * Alias for diffForHumans.
      *
-     * @param  Date $since
+     * @param Date $since
+     *
      * @return string
      */
     public function until($since = null)
@@ -123,20 +130,20 @@ class Date extends Carbon
     }
 
     /**
-     * @inheritdoc
+     * {@inheritdoc}
      */
     public function format($format)
     {
         $replace = [];
 
         // Loop all format characters and check if we can translate them.
-        for ($i = 0; $i < strlen($format); $i++) {
+        for ($i = 0; $i < strlen($format); ++$i) {
             $character = $format[$i];
 
             // Check if we can replace it with a translated version.
             if (in_array($character, ['D', 'l', 'F', 'M'])) {
                 // Check escaped characters.
-                if ($i > 0 and $format[$i - 1] == '\\') {
+                if ($i > 0 and '\\' == $format[$i - 1]) {
                     continue;
                 }
 
@@ -145,11 +152,15 @@ class Date extends Carbon
                         $key = parent::format('l');
                         break;
                     case 'M':
-                        $key = parent::format('F');
+                        $key = static::SHORT_MONTH_TRANSLATION_PREFIX . parent::format('M');
+                        break;
+                    case 'F':
+                        $key = static::FULL_MONTH_TRANSLATION_PREFIX . parent::format('M');
                         break;
                     default:
                         $key = parent::format($character);
                 }
+                $key = mb_strtolower($key);
 
                 // The original result.
                 $original = parent::format($character);
@@ -162,19 +173,18 @@ class Date extends Carbon
                 if (in_array($character, ['F', 'M'])) {
                     $choice = preg_match('#[dj][ .]*$#', substr($format, 0, $i)) ? 1 : 0;
 
-                    $translated = $lang->transChoice(mb_strtolower($key), $choice);
+                    $translated = $lang->transChoice($key, $choice);
                 } else {
-                    $translated = $lang->trans(mb_strtolower($key));
+                    $translated = $lang->trans($key);
                 }
 
                 // Short notations.
                 if (in_array($character, ['D', 'M'])) {
-                    $toTranslate = mb_strtolower($original);
+                    $toTranslate     = mb_strtolower($original);
                     $shortTranslated = $lang->trans($toTranslate);
 
                     if ($shortTranslated === $toTranslate) {
-                        // use the first 3 characters as short notation
-                        $translated = mb_substr($translated, 0, 3);
+                        $translated = $lang->trans($key);
                     } else {
                         // use translated version
                         $translated = $shortTranslated;
@@ -182,7 +192,7 @@ class Date extends Carbon
                 }
 
                 // Add to replace list.
-                if ($translated and $original != $translated) {
+                if ($translated and $original != $translated and $translated != $key) {
                     $replace[$original] = $translated;
                 }
             }
@@ -199,8 +209,9 @@ class Date extends Carbon
     /**
      * Gets the timespan between this date and another date.
      *
-     * @param  Date $time
-     * @param  string|DateTimeZone $timezone
+     * @param Date                $time
+     * @param DateTimeZone|string $timezone
+     *
      * @return int
      */
     public function timespan($time = null, $timezone = null)
@@ -247,13 +258,14 @@ class Date extends Carbon
      * Adds an amount of days, months, years, hours, minutes and seconds to a Date object.
      *
      * @param DateInterval|string $interval
-     * @return Date|bool
+     *
+     * @return bool|Date
      */
     public function add($interval)
     {
         if (is_string($interval)) {
             // Check for ISO 8601
-            if (strtoupper(substr($interval, 0, 1)) == 'P') {
+            if ('P' == strtoupper(substr($interval, 0, 1))) {
                 $interval = new DateInterval($interval);
             } else {
                 $interval = DateInterval::createFromDateString($interval);
@@ -267,13 +279,14 @@ class Date extends Carbon
      * Subtracts an amount of days, months, years, hours, minutes and seconds from a DateTime object.
      *
      * @param DateInterval|string $interval
-     * @return Date|bool
+     *
+     * @return bool|Date
      */
     public function sub($interval)
     {
         if (is_string($interval)) {
             // Check for ISO 8601
-            if (strtoupper(substr($interval, 0, 1)) == 'P') {
+            if ('P' == strtoupper(substr($interval, 0, 1))) {
                 $interval = new DateInterval($interval);
             } else {
                 $interval = DateInterval::createFromDateString($interval);
@@ -284,7 +297,7 @@ class Date extends Carbon
     }
 
     /**
-     * @inheritdoc
+     * {@inheritdoc}
      */
     public static function getLocale()
     {
@@ -292,7 +305,7 @@ class Date extends Carbon
     }
 
     /**
-     * @inheritdoc
+     * {@inheritdoc}
      */
     public static function setLocale($locale)
     {
@@ -307,10 +320,10 @@ class Date extends Carbon
         $found = false;
 
         foreach ($files as $file) {
-            $resource = __DIR__.'/Lang/'.$file.'.php';
+            $resource = __DIR__ . '/Lang/' . $file . '.php';
 
             if (file_exists($resource)) {
-                $found = true;
+                $found  = true;
                 $locale = $file;
                 break;
             }
@@ -331,7 +344,7 @@ class Date extends Carbon
     /**
      * Set the fallback locale.
      *
-     * @param  string $locale
+     * @param string $locale
      */
     public static function setFallbackLocale($locale)
     {
@@ -350,11 +363,11 @@ class Date extends Carbon
     }
 
     /**
-     * @inheritdoc
+     * {@inheritdoc}
      */
     public static function getTranslator()
     {
-        if (static::$translator === null) {
+        if (null === static::$translator) {
             static::$translator = new Translator('en');
             static::$translator->addLoader('array', new ArrayLoader());
             static::setLocale('en');
@@ -364,7 +377,7 @@ class Date extends Carbon
     }
 
     /**
-     * @inheritdoc
+     * {@inheritdoc}
      */
     public static function setTranslator(TranslatorInterface $translator)
     {
@@ -374,30 +387,59 @@ class Date extends Carbon
     /**
      * Translate a locale based time string to its english equivalent.
      *
-     * @param  string $time
+     * @param string $time
+     * @param mixed  $format
+     *
      * @return string
      */
-    public static function translateTimeString($time)
+    public static function translateTimeString($time, $format = '')
     {
         // Don't run translations for english.
-        if (static::getLocale() == 'en') {
+        if ('en' == static::getLocale()) {
             return $time;
         }
+        $format = str_split(
+            count_chars(
+                preg_replace('/\w/', '', $format),
+                3
+            )
+        );
+
+        foreach ($format as $formatDelimiter) {
+            $time = \explode(
+                $formatDelimiter,
+                $time
+            );
+            print_r($time);
+        }
+        die();
 
         // All the language file items we can translate.
         $keys = [
-            'january',
-            'february',
-            'march',
-            'april',
-            'may',
-            'june',
-            'july',
-            'august',
-            'september',
-            'october',
-            'november',
-            'december',
+            'month.short.jan',
+            'month.short.feb',
+            'month.short.mar',
+            'month.short.apr',
+            'month.short.may',
+            'month.short.jun',
+            'month.short.jul',
+            'month.short.aug',
+            'month.short.sep',
+            'month.short.oct',
+            'month.short.nov',
+            'month.short.dec',
+            'month.full.january',
+            'month.full.february',
+            'month.full.march',
+            'month.full.april',
+            'month.full.may',
+            'month.full.june',
+            'month.full.july',
+            'month.full.august',
+            'month.full.september',
+            'month.full.october',
+            'month.full.november',
+            'month.full.december',
             'monday',
             'tuesday',
             'wednesday',
@@ -408,12 +450,12 @@ class Date extends Carbon
         ];
 
         // Get all the language lines of the current locale.
-        $all = static::getTranslator()->getCatalogue()->all();
+        $all   = static::getTranslator()->getCatalogue()->all();
         $terms = array_intersect_key($all['messages'], array_flip((array) $keys));
 
         // Split terms with a | sign.
         foreach ($terms as $i => $term) {
-            if (strpos($term, '|') === false) {
+            if (false === strpos($term, '|')) {
                 continue;
             }
 
@@ -433,8 +475,13 @@ class Date extends Carbon
 
         // Replace the localized words with English words.
         $translated = $time;
+
         foreach ($terms as $english => $localized) {
-            $translated = str_ireplace($localized, $english, $translated);
+            $english = explode('.', $english);
+            // print_r([
+            //     $localized, end($english), $translated,
+            // ]);
+            $translated = str_ireplace($localized, end($english), $translated);
         }
 
         return $translated;
@@ -444,6 +491,7 @@ class Date extends Carbon
      * Get the language portion of the locale.
      *
      * @param string $locale
+     *
      * @return string
      */
     public static function getLanguageFromLocale($locale)

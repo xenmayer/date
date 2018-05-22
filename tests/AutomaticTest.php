@@ -11,6 +11,9 @@ class AutomaticTest extends TestCase
         $this->languages = array_slice(scandir('src/Lang'), 2);
     }
 
+    /**
+     * @group group
+     */
     public function testReversibleCreateFromFormat()
     {
         $defaultLocale = Date::getLocale();
@@ -43,26 +46,37 @@ class AutomaticTest extends TestCase
             'november',
             'december',
         ];
+        $fullMonths = array_map(
+            function ($month) {
+                return 'month.full.' . $month;
+            },
+            $months
+        );
+        $shortMonths = array_map(
+            function ($month) {
+                return 'month.short.' . $month;
+            },
+            $months
+        );
 
         $selector = new MessageSelector();
 
         foreach ($this->languages as $language) {
-            $language = str_replace('.php', '', $language);
+            $language     = str_replace('.php', '', $language);
             $translations = include "src/Lang/$language.php";
 
-            foreach ($months as $month) {
-                $date = new Date("1 $month");
+            foreach ($months as $monthKey => $month) {
+                $date = new Date("1 $fullMonths[$monthKey]");
                 $date->setLocale($language);
 
                 // Full
-                $translation = $selector->choose($translations[$month], 0, $language);
+                $translation = $selector->choose($translations[$fullMonths[$monthKey]], 0, $language);
                 $this->assertTrue(isset($translation));
                 $this->assertEquals($translation, $date->format('F'), "Language: $language");
 
                 // Short
-                $monthShortEnglish = mb_substr($month, 0, 3);
-                if (isset($translations[$monthShortEnglish])) {
-                    $this->assertEquals($translations[$monthShortEnglish], $date->format('M'), "Language: $language");
+                if (isset($translations[$shortMonths[$monthKey]])) {
+                    $this->assertEquals($translations[$shortMonths[$monthKey]], $date->format('M'), "Language: $language");
                 } else {
                     $this->assertEquals(mb_substr($translation, 0, 3), $date->format('M'), "Language: $language");
                 }
@@ -83,7 +97,7 @@ class AutomaticTest extends TestCase
         ];
 
         foreach ($this->languages as $language) {
-            $language = str_replace('.php', '', $language);
+            $language     = str_replace('.php', '', $language);
             $translations = include "src/Lang/$language.php";
 
             foreach ($days as $day) {
@@ -122,7 +136,7 @@ class AutomaticTest extends TestCase
         ];
 
         foreach ($this->languages as $language) {
-            $language = str_replace('.php', '', $language);
+            $language     = str_replace('.php', '', $language);
             $translations = include "src/Lang/$language.php";
 
             foreach ($items as $item) {
@@ -159,7 +173,7 @@ class AutomaticTest extends TestCase
         ];
 
         foreach ($this->languages as $language) {
-            $language = str_replace('.php', '', $language);
+            $language     = str_replace('.php', '', $language);
             $translations = include "src/Lang/$language.php";
 
             $translator = Date::getTranslator();
@@ -173,7 +187,7 @@ class AutomaticTest extends TestCase
                     continue;
                 }
 
-                for ($i = 0; $i <= 60; $i++) {
+                for ($i = 0; $i <= 60; ++$i) {
                     if (in_array($item, ['ago', 'from_now', 'after', 'before'])) {
                         $translation = $translator->transChoice($item, $i, [':time' => $i]);
                         $this->assertNotNull($translation, "Language: $language ($i)");
